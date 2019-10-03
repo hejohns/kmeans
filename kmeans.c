@@ -61,22 +61,26 @@ int main(int argc, char** argv)
 	//split data into rows
 	for(int i = 0; i < numLines; i++)
 	{
-		dataByLine[i] = malloc(2);
+		dataByLine[i] = malloc(32);
 		for(int i = 0; i < numLines; i++)
 		{
-			sizeDataByLine[i] = 2;
+			sizeDataByLine[i] = 32;
 		}
 		for(int j = 0; input[*k] != '\n'; j++)
 		{
-			tmp = realloc(dataByLine[i], sizeDataByLine[i]+1);
-			sizeDataByLine[i] = sizeDataByLine[i] + 1;
-			if(tmp == NULL)
+			if(j > (sizeDataByLine[j]-2))
 			{
-				exit(1);
-			}
-			else
-			{
-				dataByLine[i] = tmp;
+				tmp = realloc(dataByLine[i], sizeDataByLine[i]*2);
+				sizeDataByLine[i] = sizeDataByLine[i] + 1;
+				if(tmp == NULL)
+				{
+					exit(1);
+				}
+				else
+				{
+					sizeDataByLine[i] = sizeDataByLine[i]*2;
+					dataByLine[i] = tmp;
+				}
 			}
 			dataByLine[i][j] = input[*k];
 			(*k)++;
