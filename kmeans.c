@@ -6,11 +6,11 @@
 #include <math.h>
 #include "csv.h"
 
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
-#define PRINTF printf
+#define PRINTF(...); printf(_VA_ARGS_);
 #else
-#define PRINTF //printf
+#define PRINTF(...);
 #endif
 
 int main(int argc, char** argv)
@@ -25,7 +25,7 @@ int main(int argc, char** argv)
 	const int NUM_THREADS = argv[1][0] - '0';
 	const char* DATA_PATH = argv[2];
 	const int DIM = argv[3][0] - '0';
-	printf("NUM_THREADS = %d\nDATA_PATH = %s\nDIM= %d\n", NUM_THREADS, DATA_PATH, DIM);
+	PRINTF("NUM_THREADS = %d\nDATA_PATH = %s\nDIM= %d\n", NUM_THREADS, DATA_PATH, DIM);
 	FILE* datafp;
 	datafp = fopen(DATA_PATH, "r");
 	if(datafp == NULL)
@@ -40,9 +40,13 @@ int main(int argc, char** argv)
 	{
 		for(int l=0; l < DIM; l++)
 		{
-			PRINTF("%f;", data[i][l]);
+			printf("%f", data[i][l]);
+			if(l!=(DIM-1))
+			{
+				printf(",");
+			}
 		}
-		PRINTF("\n");
+		printf("\n");
 	}
 	//clean up
 	data = malloc(1);
@@ -52,7 +56,6 @@ int main(int argc, char** argv)
 		data[i] = malloc(1);
 		free(data[i]);
 	}	
-	printf("%p\n", data);
-	printf("kmeans: %s\n", strerror(errno));
+	PRINTF("kmeans: %s\n", strerror(errno));
 	return 0;
 }
