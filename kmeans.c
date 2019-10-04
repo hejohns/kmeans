@@ -6,6 +6,13 @@
 #include <math.h>
 #include "csv.h"
 
+#define DEBUG 1
+#if DEBUG
+#define PRINTF printf
+#else
+#define PRINTF //printf
+#endif
+
 int main(int argc, char** argv)
 {
 	//fail immedietly on incorrect usage
@@ -26,24 +33,26 @@ int main(int argc, char** argv)
 		printf("%s\n", strerror(errno));
 		exit(1);
 	}
-	int** data = NULL;
-	int*** data2 = &data;
+	double** data = NULL;
 	int rows = 0;
-	rows = csvParse(data2, datafp, DIM);
+	rows = csvParse(&data, datafp, DIM);
 	for(int i = 0; i < rows; i++)
 	{
 		for(int l=0; l < DIM; l++)
 		{
-			printf("%d;", data[i][l]);
+			PRINTF("%f;", data[i][l]);
 		}
-		printf("\n");
+		PRINTF("\n");
 	}
 	//clean up
-	fclose(datafp);
+	data = malloc(1);
+	free(data);
 	for(int i = 0; i < rows; i++)
 	{
+		data[i] = malloc(1);
 		free(data[i]);
-	}
+	}	
+	printf("%p\n", data);
 	printf("kmeans: %s\n", strerror(errno));
 	return 0;
 }

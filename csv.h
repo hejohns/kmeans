@@ -4,4 +4,4 @@
 #include <string.h>
 #include <math.h>
 
-int csvParse(int*** data, FILE* csvFile, const int DIM);
+double csvParse(double*** data, FILE* csvFile, const int DIM);

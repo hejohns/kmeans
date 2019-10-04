@@ -5,25 +5,14 @@
  * 0-false
  * !0-true
  */
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #define PRINTF printf
 #else
 #define PRINTF //printf
 #endif
 
-int powi(int base, int exponent);
-int powi(int base, int exponent)
-{
-	int buf = 1;
-	for(int i = 0; i < exponent; i++)
-	{
-		buf=base*buf;
-	}
-	return buf;
-}
-
-int csvParse(int*** data, FILE* csvFile, const int DIM)
+double csvParse(double*** data, FILE* csvFile, const int DIM)
 {
 	// buffer c
 	int c = 0;
@@ -60,14 +49,14 @@ int csvParse(int*** data, FILE* csvFile, const int DIM)
 	int endOfLine = 0;
 	for(int i = 0; i < numLines; i++)
 	{
-		dataByLine[i] = malloc(16);
-		sizeDataByLine[i] = 16;
+		dataByLine[i] = malloc(32);
+		sizeDataByLine[i] = 32;
 	}
 	for(int i = 0; i < numLines; i++)
 	{
 		for(int j = 0; rawCsv[counter] != '\n'; j++)
 		{
-			if(j > (sizeDataByLine[j]-2))
+			if((j*sizeof(char)) > (sizeDataByLine[i]-8))
 			{
 				tmp = realloc(dataByLine[i], sizeDataByLine[i]*2);
 				sizeDataByLine[i] = sizeDataByLine[i]*2;
@@ -90,7 +79,7 @@ int csvParse(int*** data, FILE* csvFile, const int DIM)
 	}
 	//data is in rows. Done with rawCsv
 	free(rawCsv);
-	//remove delimeters from dataByLine and convert to int**
+	//remove delimeters from dataByLine and convert to double**
 	for(int i = 0; i < numLines; i++)
 	{
 		PRINTF("%s-----\n", dataByLine[i]);
@@ -109,7 +98,7 @@ int csvParse(int*** data, FILE* csvFile, const int DIM)
 		}
 		if((numDelimit+1) != DIM)
 		{
-			printf("Given DIM does not match\n");
+			printf("Given DIM does not match: %d-%d\n", numDelimit, DIM);
 			exit(1);
 		}
 	}
@@ -160,6 +149,7 @@ jump2:
 			}
 		}
 	}
+	int decRef = 0;
 breakout2:
 	for(int i = 0; i < numLines; i++)
 	{
@@ -169,13 +159,13 @@ breakout2:
 		}
 	}
 	//create array for which cells are negative
-	int** negCoe = malloc(numLines*sizeof(long int));
+	int** coe = malloc(numLines*sizeof(long int));
 	for(int i = 0; i < numLines; i++)
 	{
-		negCoe[i] = malloc(DIM*sizeof(int));
+		coe[i] = malloc(DIM*sizeof(int));
 		for(int l = 0; l < DIM; l++)
 		{
-			negCoe[i][l] = 1;
+			coe[i][l] = 1;
 		}
 	}
 	(*data) = malloc(numLines*sizeof(long int));
@@ -207,13 +197,18 @@ jump:
 			if(((dataByLine[i][j]-'0') <= 9) && ((dataByLine[i][j]-'0') >= 0))
 			{
 //shifted for readability
-PRINTF("Triggered1-%d-%d-%d-%d\n", dataByLine[i][j]-'0', i, j, powi(10, delimitIndex[i][l]-j-1));
- (*data)[i][l] = (*data)[i][l] + ((dataByLine[i][j]-'0')*powi(10,(delimitIndex[i][l]-j-1)));
+PRINTF("Triggered1-%d-%d-%d-%f\n", dataByLine[i][j]-'0', i, j, pow(10, delimitIndex[i][l]-j-1));
+ (*data)[i][l] = (*data)[i][l] + ((dataByLine[i][j]-'0')*pow(10,(delimitIndex[i][l]-j-1)));
 			}
 			else if(dataByLine[i][j] == '-')
 			{
-				negCoe[i][l] = -1;
+				coe[i][l] = -1;
 PRINTF("Triggered2\n");
+			}
+			else if(dataByLine[i][j] == '.')
+			{
+	for(decRef = j; (dataByLine[i][decRef] != ',') && (dataByLine[i][decRef] != '\0');decRef++){}
+				coe[i][l] = coe[i][l]*pow(10, decRef-j-1);
 			}
 			else if(dataByLine[i][j] == ',')
 			{
@@ -236,36 +231,42 @@ breakout:
 			if(((dataByLine[i][j]-'0') <= 9) && ((dataByLine[i][j]-'0') >= 0))
 			{
 //shifted for readability
-PRINTF("Triggered3-%d-%d-%d-%d\n", dataByLine[i][j]-'0', i, j, powi(10, delimitIndex[i][l]-j-1));
- (*data)[i][l] = (*data)[i][l] + ((dataByLine[i][j]-'0')*powi(10,(delimitIndex[i][l]-j-1)));
+PRINTF("Triggered3-%d-%d-%d-%f\n", dataByLine[i][j]-'0', i, j, pow(10, delimitIndex[i][l]-j-1));
+ (*data)[i][l] = (*data)[i][l] + ((dataByLine[i][j]-'0')*pow(10,(delimitIndex[i][l]-j-1)));
 			}
 			else if(dataByLine[i][j] == '-')
 			{
-				negCoe[i][l] = -1;
+				coe[i][l] = -1;
 				PRINTF("Triggered4\n");
 			}
 			else if(dataByLine[i][j] == ',')
 			{
 			}
+			else if(dataByLine[i][j] == '.')
+			{
+	for(decRef = j; (dataByLine[i][decRef] != ',') && (dataByLine[i][decRef] != '\0');decRef++){}
+				coe[i][l] = coe[i][l]*pow(10, decRef-j-1);
+			}
+
 			else
 			{
 				printf("Invalid char on [%d][%d]\n", i, j);
 			}
 		}
 	}
-	//data=data*negCoe
+	//data=data*coe
 	for(int i = 0; i < numLines; i++)
 	{
 		for(int l = 0; l < DIM; l++)
 		{
-			 (*data)[i][l] = (*data)[i][l]*negCoe[i][l];
+			 (*data)[i][l] = (*data)[i][l]/coe[i][l];
 		}
 	}
 	for(int i = 0; i < numLines; i++)
 	{
 		for(int j = 0; j < DIM; j++)
 		{
-			PRINTF("%d,", (*data)[i][j]);
+			PRINTF("%f,", (*data)[i][j]);
 		}
 		PRINTF("\n");
 	}
@@ -282,9 +283,9 @@ PRINTF("Triggered3-%d-%d-%d-%d\n", dataByLine[i][j]-'0', i, j, powi(10, delimitI
 	free(delimitIndex);
 	for(int i = 0; i < numLines; i++)
 	{
-		free(negCoe[i]);
+		free(coe[i]);
 	}
-	free(negCoe);
+	free(coe);
 	printf("csvParse: %s\n", strerror(errno));
 	return numLines;
 }
