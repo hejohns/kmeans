@@ -4,8 +4,8 @@
 #include <pthread.h>
 #include <string.h>
 #include <math.h>
+#include "malloc.h"
 #include "csv.h"
-
 /*
  * DEFINE
  * 0-false
@@ -14,14 +14,14 @@
 
 #define DEBUG 0
 #if DEBUG
-#define PRINTF(...); printf(_VA_ARGS_);
+#define PRINTF(...); printf(__VA_ARGS__);
 #else
 #define PRINTF(...);
 #endif
 
 #define OUTPUT_DATA 0
 #if OUTPUT_DATA
-#define PRINTF_DATAONLY(...); printf(_VA_ARGS_);
+#define PRINTF_DATAONLY(...); printf(__VA_ARGS__);
 #else
 #define PRINTF_DATAONLY(...);
 #endif
@@ -62,13 +62,12 @@ int main(int argc, char** argv)
 		PRINTF_DATAONLY("\n");
 	}
 	//clean up
-	data = malloc(1);
-	free(data);
 	for(int i = 0; i < rows; i++)
 	{
-		data[i] = malloc(1);
 		free(data[i]);
-	}	
+	}
+	free(data);
+	//malloc_stats();
 	PRINTF("kmeans: %s\n", strerror(errno));
 	return 0;
 }
