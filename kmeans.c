@@ -6,11 +6,24 @@
 #include <math.h>
 #include "csv.h"
 
+/*
+ * DEFINE
+ * 0-false
+ * !0-true
+ */
+
 #define DEBUG 0
 #if DEBUG
 #define PRINTF(...); printf(_VA_ARGS_);
 #else
 #define PRINTF(...);
+#endif
+
+#define OUTPUT_DATA 0
+#if OUTPUT_DATA
+#define PRINTF_DATAONLY(...); printf(_VA_ARGS_);
+#else
+#define PRINTF_DATAONLY(...);
 #endif
 
 int main(int argc, char** argv)
@@ -40,13 +53,13 @@ int main(int argc, char** argv)
 	{
 		for(int l=0; l < DIM; l++)
 		{
-			printf("%f", data[i][l]);
+			PRINTF_DATAONLY("%f", data[i][l]);
 			if(l!=(DIM-1))
 			{
-				printf(",");
+				PRINTF_DATAONLY(",");
 			}
 		}
-		printf("\n");
+		PRINTF_DATAONLY("\n");
 	}
 	//clean up
 	data = malloc(1);
