@@ -24,7 +24,7 @@ double csvParse(double*** data, FILE* csvFile, const int DIM)
 	}
 	PRINTF("%d\n", lengthOfCsv);
 	fseek(csvFile, 0, SEEK_SET);
-	char* rawCsv = malloc(lengthOfCsv);
+	char* restrict rawCsv = malloc(lengthOfCsv);
 	for(int i = 0; (c = fgetc(csvFile)) != EOF; i++)
 	{
 		rawCsv[i] = c;
@@ -42,10 +42,10 @@ double csvParse(double*** data, FILE* csvFile, const int DIM)
 	}
 	PRINTF("numLines: %d\n", numLines);
 	//split rawCsv into rows. Stored in dataByLine
-	char** dataByLine = malloc(numLines*sizeof(long int));
+	char** restrict dataByLine = malloc(numLines*sizeof(long int));
 	int counter = 0;
 	int sizeDataByLine[numLines];
-	char* tmp = NULL;
+	char* restrict tmp = NULL;
 	int endOfLine = 0;
 	for(int i = 0; i < numLines; i++)
 	{
@@ -98,7 +98,7 @@ double csvParse(double*** data, FILE* csvFile, const int DIM)
 		}
 	}
 	//create array for which cells are negative
-	int** coe = malloc(numLines*sizeof(long int));
+	int** restrict coe = malloc(numLines*sizeof(long int));
 	for(int i = 0; i < numLines; i++)
 	{
 		coe[i] = malloc(DIM*sizeof(int));
@@ -124,14 +124,33 @@ nextLine:
 		{
 			if(((dataByLine[i][j]-'0') <= 9) && ((dataByLine[i][j]-'0') >= 0))
 			{
+				char containsDecimal = 0;
+				for(int u=j;(dataByLine[i][u]!=',')&&(dataByLine[i][u]!='\0');u++)
+				{
+					if(dataByLine[i][u] == '.')
+					{
+						containsDecimal = 1;
+						goto jump;
+					}
+				}
+jump:
+				if(containsDecimal)
+				{
 	//shifted for readability
+	for(stop = j; (dataByLine[i][stop] != ',') && (dataByLine[i][stop] != '\0');stop++){}
+	PRINTF("Digit-%d-%d-%d-%f\n", dataByLine[i][j]-'0', i, j, pow(10, stop-j-2));
+	(*data)[i][l] = (*data)[i][l] + ((dataByLine[i][j]-'0')*pow(10,(stop-j-2)));
+				}
+				else
+				{
 	for(stop = j; (dataByLine[i][stop] != ',') && (dataByLine[i][stop] != '\0');stop++){}
 	PRINTF("Digit-%d-%d-%d-%f\n", dataByLine[i][j]-'0', i, j, pow(10, stop-j-1));
 	(*data)[i][l] = (*data)[i][l] + ((dataByLine[i][j]-'0')*pow(10,(stop-j-1)));
+				}
 			}
 			else if(dataByLine[i][j] == '-')
 			{
-				coe[i][l] = -1;
+				coe[i][l] = coe[i][l]*-1;
 				PRINTF("Negative-\n");
 			}
 			else if(dataByLine[i][j] == '.')
