@@ -33,34 +33,79 @@ int main(int argc, char** argv)
 	//fail immedietly on incorrect usage
 	if(argc != 6)
 	{
-		printf("Usage: \n    ./kmeans [DATA_PATH] [DIM(data)] [K] [ITERATIONS] [NUM_THREADS]\n");
+		printf("Usage: \n    ./kmeans [DATA_PATH] [DIM(data)] [K] [EPSILON] [NUM_THREADS]\n");
 		exit(1);
 	}
 	//read data
 	int stop;
 	int num_threads = 0;
+	for(stop = 0; argv[5][stop] != '\0'; stop++){}
 	for(int i = 0; argv[5][i] != '\0'; i++)
 	{
-		for(stop = 0; argv[5][stop] != '\0'; stop++){}
 		num_threads = num_threads + (argv[5][i]-'0')*pow(10,(stop-i-1));
 	}
 	const int NUM_THREADS = num_threads;
 	const char* DATA_PATH = argv[1];
-	const int DIM = argv[2][0] - '0';
+	int dim = 0;
+	for(stop = 0; argv[2][stop] != '\0'; stop++){}
+	for(int i = 0; argv[2][i] != '\0'; i++)
+	{
+		dim= dim + (argv[2][i]-'0')*pow(10,(stop-i-1));
+	}
+	const int DIM = dim;
 	int numCenters = 0;
+	for(stop = 0; argv[3][stop] != '\0'; stop++){}
 	for(int i = 0; argv[3][i] != '\0'; i++)
 	{
-		for(stop = 0; argv[3][stop] != '\0'; stop++){}
 		numCenters = numCenters + (argv[3][i]-'0')*pow(10,(stop-i-1));
 	}
 	const int K = numCenters;
-	int iterations = 0;
+	int decimalPos = 0;
+	char decimalAfter = 0;
+	double epsilon = 0;
+	for(stop = 0; argv[4][stop] != '\0'; stop++){}
+	for(int j = 0; argv[4][j] != '\0';j++)
+	{
+		if(argv[4][j] == '.')
+		{
+			decimalPos = j;
+			goto hurdle;
+		}
+	}
+hurdle:
 	for(int i = 0; argv[4][i] != '\0'; i++)
 	{
-		for(stop = 0; argv[4][stop] != '\0'; stop++){}
-		iterations = iterations + (argv[4][i]-'0')*pow(10,(stop-i-1));
+		decimalAfter = 0;
+		if(((argv[4][i]-'0') <= '9') && ((argv[4][i]-'0')>=0))
+		{
+		for(int j = i; argv[4][j] != '\0';j++)
+		{
+			if(argv[4][j] == '.')
+			{
+				decimalAfter = 1;
+				goto hurdle2;
+			}
+		}
+hurdle2:
+		if(decimalAfter)
+		{
+			epsilon = epsilon + (argv[4][i]-'0')*pow(10,(stop-i-2));
+		}
+		else
+		{
+			epsilon = epsilon + (argv[4][i]-'0')*pow(10,(stop-i-1));
+		}
+		}
+		else if(argv[4][i] == '.')
+		{
+			decimalPos = stop-i;
+		}
+		else
+		{
+		}
 	}
-	const int ITERATIONS = iterations;
+	if(decimalPos != 0){epsilon/=(pow(10,decimalPos-1));}
+	const double EPSILON = epsilon;
 	PRINTF("NUM_THREADS = %d\nDATA_PATH = %s\nDIM = %d\nK = %d", NUM_THREADS, DATA_PATH, DIM, K);
 	FILE* datafp = fopen(DATA_PATH, "r");
 	if(datafp == NULL)
@@ -76,7 +121,8 @@ int main(int argc, char** argv)
 	double centers[K][DIM];
 	double ownership[rows][2];
 	int numElem[K];
-	double error;
+	double error = 0;
+	double error2 = 0;
 	//set initial centers in parallel
 #pragma omp parallel
 	{
@@ -96,8 +142,12 @@ int main(int argc, char** argv)
 	}
 	}
 	//done setting initials
-	for(int j = 0; j < ITERATIONS; j++)
+	epsilon=-1;
+	for(int j = 0; fabs(error-error2) > epsilon; j++)
 	{
+		printf("%f-%f,%f>%f:%d\n",error, error2, fabs(error-error2), epsilon, fabs(error-error2)>epsilon);
+		error=error2;
+		printf("%d\n",j);
 	//enter iterative parallel
 #pragma omp parallel
 	{
@@ -116,11 +166,11 @@ int main(int argc, char** argv)
 		}
 #pragma omp barrier
 		//calculate total error
-		error=0;
-#pragma omp for schedule(auto) reduction(+:error)
+		error2=0;
+#pragma omp for schedule(auto) reduction(+:error2)
 		for(int i=0;i<rows;i++)
 		{
-			error+=ownership[i][1];
+			error2+=ownership[i][1];
 		}
 		//calculate new centers
 #pragma omp for schedule(auto)
@@ -177,14 +227,13 @@ int main(int argc, char** argv)
 		}
 	}//end of parallel
 	//return to serial
+	epsilon = EPSILON;
 	}
-	printf("error-%f\n", error);
 for(int u = 0; u<K; u++){
 for(int p=0;p<DIM;p++){
 printf("center%d,%d:%f--%i\n", u, p, centers[u][p], numElem[u]);
 }}
 for(int i=0;i<rows;i++){
-//printf("%d-%f-%f-%f,%f,%f\n",i,ownership[i][0],ownership[i][1],centers[0][0],centers[0][1],centers[0][2]);
 }
 	//
 	//

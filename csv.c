@@ -60,6 +60,7 @@ double csvParse(double*** data, FILE* csvFile, const int DIM)
 			{
 				tmp = realloc(dataByLine[i], sizeDataByLine[i]*2);
 				sizeDataByLine[i] = sizeDataByLine[i]*2;
+				printf("sizeDataByLine-%d\n", sizeDataByLine[i]);
 				if(tmp == NULL)
 				{
 					exit(1);
