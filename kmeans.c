@@ -6,7 +6,7 @@
 #include <math.h>
 #include <malloc.h>
 #include "csv.h"
-#include "kmeans_math.h"
+#include "kmeans_funcs.h"
 
 /*
  * DEFINE
@@ -33,7 +33,7 @@ int main(int argc, char** argv)
 	//fail immedietly on incorrect usage
 	if(argc != 6)
 	{
-		printf("Usage: \n    ./kmeans [DATA_PATH] [DIM(data)] [K] [EPSILON] [NUM_THREADS]\n");
+		printf("Usage: \n    ./kmeans [DATA_PATH] [DIM(data)] [K] [ITERATIONS] [NUM_THREADS]\n");
 		exit(1);
 	}
 	//read data
@@ -62,7 +62,7 @@ int main(int argc, char** argv)
 	const int K = numCenters;
 	int decimalPos = 0;
 	char decimalAfter = 0;
-	double epsilon = 0;
+	double iterations = 0;
 	for(stop = 0; argv[4][stop] != '\0'; stop++){}
 	for(int j = 0; argv[4][j] != '\0';j++)
 	{
@@ -89,11 +89,11 @@ hurdle:
 hurdle2:
 		if(decimalAfter)
 		{
-			epsilon = epsilon + (argv[4][i]-'0')*pow(10,(stop-i-2));
+			iterations = iterations + (argv[4][i]-'0')*pow(10,(stop-i-2));
 		}
 		else
 		{
-			epsilon = epsilon + (argv[4][i]-'0')*pow(10,(stop-i-1));
+			iterations = iterations + (argv[4][i]-'0')*pow(10,(stop-i-1));
 		}
 		}
 		else if(argv[4][i] == '.')
@@ -104,8 +104,8 @@ hurdle2:
 		{
 		}
 	}
-	if(decimalPos != 0){epsilon/=(pow(10,decimalPos-1));}
-	const double EPSILON = epsilon;
+	if(decimalPos != 0){iterations/=(pow(10,decimalPos-1));}
+	const double ITERATIONS = iterations;
 	PRINTF("NUM_THREADS = %d\nDATA_PATH = %s\nDIM = %d\nK = %d", NUM_THREADS, DATA_PATH, DIM, K);
 	FILE* datafp = fopen(DATA_PATH, "r");
 	if(datafp == NULL)
@@ -118,123 +118,65 @@ hurdle2:
 	rows = csvParse(data, datafp, DIM);
 	//
 	omp_set_num_threads(NUM_THREADS);
-	double centers[K][DIM];
-	double ownership[rows][2];
-	int numElem[K];
-	double error = 0;
-	double error2 = 0;
-	//set initial centers in parallel
-#pragma omp parallel
+	double finalCenters[K][DIM];
+	double*** centers = malloc(sizeof(long int));//[K][DIM]
+	(*centers) = malloc(K*sizeof(long int));
+	for(int i=0; i<K;i++)
 	{
-#pragma omp for schedule(auto) collapse(2)
-	for(int i=0; i<K; i++)
+		(*centers)[i] = malloc(DIM*sizeof(double));
+	}
+	double*** ownership = malloc(sizeof(long int));//[rows][2]
+	(*ownership) = malloc(rows*sizeof(long int));
+	for(int i=0; i<rows; i++)
 	{
-		for(int j=0; j<DIM; j++)
-		{
-			centers[i][j] = (*data)[(i+1)*(rows/K)-1][j];
-		}
+		(*ownership)[i] = malloc(2*sizeof(double));
 	}
-#pragma omp for schedule(auto)
-	for(int i=0; i<rows;i++)
-	{
-		ownership[i][0] = 0;
-		ownership[i][1] = distance_sqed((*data)[i], centers[0], DIM);
-	}
-	}
+	int** numElem = malloc(sizeof(long int));//[K]
+	(*numElem) = malloc(K*sizeof(int));
+	double error = 1;
+	double error2 = 2;
+	double minError = 0;
+	initializeCenters(data, centers, ownership, rows, DIM, K);
 	//done setting initials
-	epsilon=-1;
-	for(int j = 0; fabs(error-error2) > epsilon; j++)
+	for(int m = 0; m < ITERATIONS; m++)
 	{
-		printf("%f-%f,%f>%f:%d\n",error, error2, fabs(error-error2), epsilon, fabs(error-error2)>epsilon);
-		error=error2;
-		printf("%d\n",j);
-	//enter iterative parallel
+		for(int j = 0; fabs(error-error2) > 0; j++)
+		{
+			error = error2;
+			/*
+			printf("%f-%f,%f>%f:%d\n",error, error2, fabs(error-error2), iterations, fabs(error-error2)>iterations);
+			printf("%d\n",j);
+			*/
 #pragma omp parallel
-	{
-		//calculate ownership
-#pragma omp for schedule(auto) collapse(2)
-		for(int i = 0; i<rows; i++)
 		{
-			for(int u = 0; u<K; u++)
+			//calculate ownership
+			calculateOwnership(data, centers, ownership, rows, DIM, K);
+#pragma omp barrier
+			//calculate total error
+		}
+			error2 = totalError(ownership, rows);
+#pragma omp parallel
+		{
+			//calculate new centers
+			newCenters(data, centers, ownership, numElem, rows, K, DIM);
+		}//end of parallel
+		}//return to serial
+		if(minError>error2 || m==0)
+		{
+			minError = error2;
+			for(int u=0;u<K;u++)
 			{
-				if (ownership[i][1] > distance_sqed((*data)[i], centers[u], DIM))
+				for(int p=0;p<DIM;p++)
 				{
-					ownership[i][0] = u;
-					ownership[i][1] = distance_sqed((*data)[i], centers[u], DIM);
+					finalCenters[u][p] = (*centers)[u][p];
 				}
 			}
 		}
-#pragma omp barrier
-		//calculate total error
-		error2=0;
-#pragma omp for schedule(auto) reduction(+:error2)
-		for(int i=0;i<rows;i++)
-		{
-			error2+=ownership[i][1];
-		}
-		//calculate new centers
-#pragma omp for schedule(auto)
-		for(int u=0; u<K;u++)
-		{
-			numElem[u] = 0;
-		}
-#pragma omp barrier
-#pragma omp for schedule(auto) collapse(2)
-		for(int u=0; u<K;u++)
-		{
-			for(int i=0; i<rows;i++)
-			{
-				if(ownership[i][0] == u)
-				{
-#pragma omp atomic
-					numElem[u] += 1;
-				}
-			}
-		}
-#pragma omp barrier
-#pragma omp for schedule(auto) collapse(2)
-		for(int u=0; u<K;u++)
-		{
-			for(int p=0; p<DIM;p++)
-			{
-				centers[u][p] = 0;
-			}
-		}
-#pragma omp barrier
-#pragma omp for schedule(auto) collapse(3)
-		for(int u=0; u<K;u++)
-		{
-			for(int p=0; p<DIM;p++)
-			{
-				for(int i = 0; i<rows;i++)
-				{
-					if(ownership[i][0] == u)
-					{
-#pragma omp atomic
-						centers[u][p] += (*data)[i][p];
-					}
-				}
-			}
-		}
-#pragma omp barrier
-#pragma omp for schedule(auto) collapse(2)
-		for(int u=0; u<K;u++)
-		{
-			for(int p=0; p<DIM;p++)
-			{
-				centers[u][p] /= numElem[u];
-			}
-		}
-	}//end of parallel
-	//return to serial
-	epsilon = EPSILON;
 	}
 for(int u = 0; u<K; u++){
 for(int p=0;p<DIM;p++){
-printf("center%d,%d:%f--%i\n", u, p, centers[u][p], numElem[u]);
+printf("center%d,%d:%f--%i\n", u, p, (*centers)[u][p], (*numElem)[u]);
 }}
-for(int i=0;i<rows;i++){
-}
 	//
 	//
 	for(int i = 0; i < rows; i++)
@@ -251,11 +193,27 @@ for(int i=0;i<rows;i++){
 	}
 	//
 	//clean up
+	//malloc_stats();
 	for(int i = 0; i < rows; i++)
 	{
 		free((*data)[i]);
 	}
 	free(*data);
+	free(data);//[rows][DIM]
+	for(int i=0; i<K; i++)
+	{
+		free((*centers)[i]);
+	}
+	free(*centers);
+	free(centers);//[K][DIM]
+	for(int i=0; i<rows; i++)
+	{
+		free((*ownership)[i]);
+	}
+	free(*ownership);
+	free(ownership);//[rows][2]
+	free(*numElem);
+	free(numElem);//[K]
 	//malloc_stats();
 	PRINTF("kmeans: %s\n", strerror(errno));
 	return 0;
