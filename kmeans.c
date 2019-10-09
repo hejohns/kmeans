@@ -14,7 +14,7 @@
  * !0-true
  */
 
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #define PRINTF(...); printf(__VA_ARGS__);
 #else
@@ -87,6 +87,7 @@ hurdle:
 			}
 		}
 hurdle2:
+		
 		if(decimalAfter)
 		{
 			iterations = iterations + (argv[4][i]-'0')*pow(10,(stop-i-2));
@@ -105,7 +106,7 @@ hurdle2:
 		}
 	}
 	if(decimalPos != 0){iterations/=(pow(10,decimalPos-1));}
-	const double ITERATIONS = iterations;
+	const int ITERATIONS = iterations;
 	PRINTF("NUM_THREADS = %d\nDATA_PATH = %s\nDIM = %d\nK = %d", NUM_THREADS, DATA_PATH, DIM, K);
 	FILE* datafp = fopen(DATA_PATH, "r");
 	if(datafp == NULL)
@@ -117,8 +118,6 @@ hurdle2:
 	int rows = 0;
 	rows = csvParse(data, datafp, DIM);
 	//
-	omp_set_num_threads(NUM_THREADS);
-	double finalCenters[K][DIM];
 	double*** centers = malloc(sizeof(long int));//[K][DIM]
 	(*centers) = malloc(K*sizeof(long int));
 	for(int i=0; i<K;i++)
@@ -133,42 +132,55 @@ hurdle2:
 	}
 	int** numElem = malloc(sizeof(long int));//[K]
 	(*numElem) = malloc(K*sizeof(int));
+	double finalCenters[ITERATIONS][K][DIM];
+	double errors[ITERATIONS];
 	double error = 1;
 	double error2 = 2;
 	double minError = 0;
-	initializeCenters(data, centers, ownership, rows, DIM, K);
 	//done setting initials
+	omp_set_num_threads(NUM_THREADS);
+	omp_set_nested(0);
 	for(int m = 0; m < ITERATIONS; m++)
 	{
+		initializeCenters(data, centers, ownership, rows, DIM, K);
+
 		for(int j = 0; fabs(error-error2) > 0; j++)
 		{
 			error = error2;
-			/*
-			printf("%f-%f,%f>%f:%d\n",error, error2, fabs(error-error2), iterations, fabs(error-error2)>iterations);
-			printf("%d\n",j);
-			*/
 #pragma omp parallel
 		{
 			//calculate ownership
 			calculateOwnership(data, centers, ownership, rows, DIM, K);
 #pragma omp barrier
 			//calculate total error
-		}
 			error2 = totalError(ownership, rows);
-#pragma omp parallel
-		{
+#pragma omp barrier
 			//calculate new centers
 			newCenters(data, centers, ownership, numElem, rows, K, DIM);
+#pragma omp barrier
+			errors[m] = error2;
+#pragma omp for schedule(auto) collapse(2)
+			for(int u=0; u<K;u++)
+			{
+				for(int p=0; p<DIM; p++)
+				{
+					finalCenters[m][u][p] = (*centers)[u][p];
+				}
+			}
 		}//end of parallel
 		}//return to serial
-		if(minError>error2 || m==0)
+	}
+	double finalFinalCenters[K][DIM];
+	double minimal = errors[0];
+	for(int m=0;m<ITERATIONS;m++)
+	{
+		for(int u=0; u<K;u++)
 		{
-			minError = error2;
-			for(int u=0;u<K;u++)
+			if(errors[m] > minimal)
 			{
 				for(int p=0;p<DIM;p++)
 				{
-					finalCenters[u][p] = (*centers)[u][p];
+					finalFinalCenters[u][p] = finalCenters[m][u][p];
 				}
 			}
 		}
@@ -177,6 +189,9 @@ for(int u = 0; u<K; u++){
 for(int p=0;p<DIM;p++){
 printf("center%d,%d:%f--%i\n", u, p, (*centers)[u][p], (*numElem)[u]);
 }}
+for(int u=0; u<K;u++)
+for(int p=0;p<DIM;p++)
+printf("%f\n", finalFinalCenters[u][p]);
 	//
 	//
 	for(int i = 0; i < rows; i++)
