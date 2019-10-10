@@ -59,7 +59,6 @@ double csvParse(double*** data, FILE* csvFile, const int DIM)
 			if((j*sizeof(char)) > (sizeDataByLine[i]-8))
 			{
 				tmp = realloc(dataByLine[i], sizeDataByLine[i]*2);
-				printf("sizeDataByLine-%d\n", sizeDataByLine[i]);
 				if(tmp == NULL)
 				{
 					exit(1);

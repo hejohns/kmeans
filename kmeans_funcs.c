@@ -17,35 +17,36 @@ double distance_sqed(double* x1, double* x2, int DIM)
 	double tmp = 0;
 	for(int i = 0; i<DIM; i++)
 	{
-		tmp = tmp+pow(x1[i]-x2[i],2);
+		tmp = tmp+(x1[i]-x2[i])*(x1[i]-x2[i]);
 	}
 	return tmp;
 }
 
-void initializeCenters(double*** data, double*** centers, double*** ownership, int rows, const int DIM, const int K)
+void initializeCentersRand(double*** data, double*** centers, int rows, const int DIM, const int K)
 {
-#pragma omp parallel
-        {
-#pragma omp for schedule(auto) collapse(2)
-        for(int i=0; i<K; i++)
-        {
-                for(int j=0; j<DIM; j++)
-                {
-                        (*centers)[i][j] = (*data)[(i+1)*(rows/K)-1][j];
-                }
-        }
-#pragma omp for schedule(auto)
-        for(int i=0; i<rows;i++)
-        {
-                (*ownership)[i][0] = 0;
-                (*ownership)[i][1] = distance_sqed((*data)[i], (*centers)[0], DIM);
-        }
-        }
+	unsigned int seed = time(0);
+	unsigned int* seed2 = &seed;
+	for(int i=0; i<K; i++){
+		int tmp = rand_r(seed2)%rows;
+		for(int j=0; j<DIM; j++){
+			(*centers)[i][j] = (*data)[tmp][j];
+		}
+	}
+}
+
+void initializeCentersSpaced(double*** data, double*** centers, int rows, const int DIM, const int K)
+{
+	for(int i=0; i<K; i++)
+	{
+		for(int j=0; j<DIM; j++)
+		{
+			(*centers)[i][j] = (*data)[(i+1)*(rows/K)-1][j];
+		}
+	}
 }
 
 void calculateOwnership(double*** data, double*** centers, double*** ownership, int rows, const int DIM, const int K)
 {
-#pragma omp for schedule(auto) collapse(2)
 		for(int i = 0; i<rows; i++)
 		{
 			for(int u = 0; u<K; u++)
@@ -62,7 +63,6 @@ void calculateOwnership(double*** data, double*** centers, double*** ownership, 
 double totalError(double*** ownership,int rows)
 {
 	double error=0;
-#pragma omp parallel for schedule(auto) reduction(+:error)
 	for(int i=0;i<rows;i++)
 	{
 		error+=(*ownership)[i][1];
@@ -72,26 +72,20 @@ double totalError(double*** ownership,int rows)
 
 void newCenters(double*** data, double*** centers, double*** ownership, int** numElem, int rows, const int K, const int DIM)
 {
-#pragma omp for schedule(auto)
 	for(int u=0; u<K;u++)
 	{
 		(*numElem)[u] = 0;
 	}
-#pragma omp barrier
-#pragma omp for schedule(auto) collapse(2)
 	for(int u=0; u<K;u++)
 	{
 		for(int i=0; i<rows;i++)
 		{
 			if((*ownership)[i][0] == u)
 			{
-#pragma omp atomic
 				(*numElem)[u] += 1;
 			}
 		}
 	}
-#pragma omp barrier
-#pragma omp for schedule(auto) collapse(2)
 	for(int u=0; u<K;u++)
 	{
 		for(int p=0; p<DIM;p++)
@@ -99,8 +93,6 @@ void newCenters(double*** data, double*** centers, double*** ownership, int** nu
 			(*centers)[u][p] = 0;
 		}
 	}
-#pragma omp barrier
-#pragma omp for schedule(auto) collapse(3)
 	for(int u=0; u<K;u++)
 	{
 		for(int p=0; p<DIM;p++)
@@ -109,14 +101,11 @@ void newCenters(double*** data, double*** centers, double*** ownership, int** nu
 			{
 				if((*ownership)[i][0] == u)
 				{
-#pragma omp atomic
 					(*centers)[u][p] += (*data)[i][p];
 				}
 			}
 		}
 	}
-#pragma omp barrier
-#pragma omp for schedule(auto) collapse(2)
 	for(int u=0; u<K;u++)
 	{
 		for(int p=0; p<DIM;p++)
@@ -124,5 +113,4 @@ void newCenters(double*** data, double*** centers, double*** ownership, int** nu
 			(*centers)[u][p] /= (*numElem)[u];
 		}
 	}
-#pragma omp barrier
 }
