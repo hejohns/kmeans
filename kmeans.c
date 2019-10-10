@@ -107,7 +107,7 @@ hurdle2:
 	int rows = 0;
 	rows = csvParse(data, datafp, DIM);
 	fclose(datafp);
-	double finalCenters[ITERATIONS][K][DIM];
+	double finalCenters[ITERATIONS][K][DIM+1];
 	double errors[ITERATIONS];
 	omp_set_num_threads(NUM_THREADS);
 #pragma omp parallel for schedule(auto)
@@ -148,6 +148,9 @@ hurdle2:
 				finalCenters[m][u][p] = (*centers)[u][p];
 				//printf("%f\n", finalCenters[m][u][p]);
 		}}
+		for(int u=0; u<K;u++){
+			finalCenters[m][u][DIM] = (*numElem)[u];
+		}
 		for(int i=0; i<K; i++){
 			free((*centers)[i]);
 		}
@@ -180,9 +183,9 @@ hurdle2:
 					minimal = finalCenters[m][u][p];
 	}}}}
 	for(int u=0; u<K;u++){
-		for(int p=0;p<DIM;p++){
+		for(int p=0;p<DIM+1;p++){
 			printf("%f", finalFinalCenters[u][p]);
-			if(p<DIM-1){
+			if(p<DIM){
 				printf(",");
 		}}
 		printf("\n");
