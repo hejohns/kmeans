@@ -14,7 +14,9 @@
  * !0-true
  */
 
-#define DEBUG 0
+#define ITER_PER_THREAD 256
+
+#define DEBUG 1
 #if DEBUG
 #define PRINTF(...); printf(__VA_ARGS__);
 #else
@@ -36,154 +38,183 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 	//read data
-	int stop;
-	int num_threads = 0;
-	for(stop = 0; argv[5][stop] != '\0'; stop++){}
-	for(int i = 0; argv[5][i] != '\0'; i++){
-		num_threads = num_threads + (argv[5][i]-'0')*pow(10,(stop-i-1));
-	}
-	const int NUM_THREADS = num_threads;
 	const char* DATA_PATH = argv[1];
-	int dim = 0;
-	for(stop = 0; argv[2][stop] != '\0'; stop++){}
-	for(int i = 0; argv[2][i] != '\0'; i++){
-		dim= dim + (argv[2][i]-'0')*pow(10,(stop-i-1));
-	}
-	const int DIM = dim;
-	int numCenters = 0;
-	for(stop = 0; argv[3][stop] != '\0'; stop++){}
-	for(int i = 0; argv[3][i] != '\0'; i++){
-		numCenters = numCenters + (argv[3][i]-'0')*pow(10,(stop-i-1));
-	}
-	const int K = numCenters;
-	int decimalPos = 0;
-	char decimalAfter = 0;
-	double iterations = 0;
-	for(stop = 0; argv[4][stop] != '\0'; stop++){}
-	for(int j = 0; argv[4][j] != '\0';j++){
-		if(argv[4][j] == '.'){
-			decimalPos = j;
-			goto hurdle;
-	}}
-hurdle:
-	for(int i = 0; argv[4][i] != '\0'; i++)
-	{
-		decimalAfter = 0;
-		if(((argv[4][i]-'0') <= '9') && ((argv[4][i]-'0')>=0))
-		{
-			for(int j = i; argv[4][j] != '\0';j++)
-			{
-				if(argv[4][j] == '.')
-				{
-					decimalAfter = 1;
-					goto hurdle2;
-				}
-			}
-hurdle2:
-			if(decimalAfter)
-			{
-				iterations = iterations + (argv[4][i]-'0')*pow(10,(stop-i-2));
-			}
-			else
-			{
-				iterations = iterations + (argv[4][i]-'0')*pow(10,(stop-i-1));
-			}
-		}
-		else if(argv[4][i] == '.')
-		{
-			decimalPos = stop-i;
-		}
-		else{}
-	}
-	if(decimalPos != 0){iterations/=(pow(10,decimalPos-1));}
-	const int ITERATIONS = iterations;
-	PRINTF("NUM_THREADS = %d\nDATA_PATH = %s\nDIM = %d\nK = %d\n", NUM_THREADS, DATA_PATH, DIM, K);
+	const unsigned int DIM = str2uint(argv[2]);
+	const unsigned int K = str2uint(argv[3]);
+	const unsigned int iterations = str2uint(argv[4]);
+	const unsigned int ITERATIONS = (iterations-iterations%ITER_PER_THREAD)+ITER_PER_THREAD;
+	const unsigned int NUM_THREADS = str2uint(argv[5]);
+	PRINTF("ITERATIONS=%d\nNUM_THREADS = %d\nDATA_PATH = %s\nDIM = %d\nK = %d\n", ITERATIONS, NUM_THREADS, DATA_PATH, DIM, K);
 	FILE* datafp = fopen(DATA_PATH, "r");
 	if(datafp == NULL){
 		printf("%s\n", strerror(errno));
 		exit(1);
 	}
-	double*** restrict data = malloc(sizeof(long int));
+	double*** restrict data = malloc(sizeof(void*));
 	int rows = 0;
 	rows = csvParse(data, datafp, DIM);
 	fclose(datafp);
-	double finalCenters[ITERATIONS][K][DIM+1];
-	double errors[ITERATIONS];
+	
+	double*** finalCenters = malloc(ITERATIONS*sizeof(void*));//[ITERATIONS][K][DIM+1]
+	double* errors = malloc(ITERATIONS*sizeof(double));//[ITERATIONS];
+	for(int i=0; i<ITERATIONS; i++)
+	{
+		finalCenters[i] = malloc(K*sizeof(void*));
+		for(int j=0; j<K; j++)
+		{
+			finalCenters[i][j] = malloc((DIM+1)*sizeof(double));
+		}
+	}
+	//
+	for(int i=0; i<ITERATIONS;i++)
+	{
+		for(int j=0; j<K; j++)
+		{
+			for(int l=0; l<DIM+1; l++){
+			finalCenters[i][j][l]=1;
+			}
+		}
+	}
+	//
+	unsigned int index=0;
 	omp_set_num_threads(NUM_THREADS);
 #pragma omp parallel for schedule(auto)
-	for(int m = 0; m < ITERATIONS; m++)
+for(int m=0; m < ITERATIONS/ITER_PER_THREAD; m++)
+{
+	double*** centers = malloc(sizeof(void*));//[K][DIM]
+	(*centers) = malloc(K*sizeof(void*));
+	for(int i=0; i<K;i++)
 	{
-		double*** centers = malloc(sizeof(long int));//[K][DIM]
-		(*centers) = malloc(K*sizeof(long int));
-		for(int i=0; i<K;i++)
-		{
-			(*centers)[i] = malloc(DIM*sizeof(double));
-		}
-		double*** ownership = malloc(sizeof(long int));//[rows][2]
-		(*ownership) = malloc(rows*sizeof(long int));
-		for(int i=0; i<rows; i++)
-		{
-			(*ownership)[i] = malloc(2*sizeof(double));
-		}
-		int** numElem = malloc(sizeof(long int));//[K]
-		(*numElem) = malloc(K*sizeof(int));
+		(*centers)[i] = malloc(DIM*sizeof(double));
+	}
+	double*** ownership = malloc(sizeof(void*));//[rows][2]
+	(*ownership) = malloc(rows*sizeof(void*));
+	for(int i=0; i<rows; i++)
+	{
+		(*ownership)[i] = malloc(2*sizeof(double));
+	}
+	int** numElem = malloc(sizeof(void*));//[K]
+	(*numElem) = malloc(K*sizeof(int));
+	for(int n=0; n<ITER_PER_THREAD; n++)
+	{
 		double error = 0;
 		double error2 = 0;
-		if(m==0){
+		if(index==0){
 			initializeCentersSpaced(data, centers, rows, DIM, K);
+			/*
+				for(int u=0; u<K; u++)
+				{
+					for(int p=0; p<DIM; p++)
+					{
+						printf("dp:%f\n", (*centers)[u][p]);
+					}
+				}
+				*/
 		}
 		else{
 			initializeCentersRand(data, centers, rows, DIM, K);
+			/*
+				for(int u=0; u<K; u++)
+				{
+					for(int p=0; p<DIM; p++)
+					{
+						printf("cp:%f\n", (*centers)[u][p]);
+					}
+				}
+				*/
 		}
 		for(int j = 0; (fabs(error-error2) > 0) || (j==0); j++)
 		{
 			error = error2;
-			calculateOwnership(data, centers, ownership, rows, DIM, K);
+			if(j==0){
+				initializeOwnership(data, centers, ownership, rows, DIM, K);
+				/*
+				for(int u=0; u<K; u++)
+				{
+					for(int p=0; p<DIM; p++)
+					{
+						printf("lp:%f\n", (*centers)[u][p]);
+					}
+				}
+				*/
+				calculateOwnership(data, centers, ownership, rows, DIM, K);
+			}
+			else{
+				/*
+				for(int u=0; u<K; u++)
+				{
+					for(int p=0; p<DIM; p++)
+					{
+						printf("up:%f\n", (*centers)[u][p]);
+					}
+				}
+				*/
+				calculateOwnership(data, centers, ownership, rows, DIM, K);
+			}
 			error2 = totalError(ownership, rows);
 			newCenters(data, centers, ownership, numElem, rows, K, DIM);
-			errors[m] = error2;
+			errors[index] = error2;
 		}//done finding one set of centers
+		for(int u=0; u<K; u++)
+		{
+			for(int p=0; p<DIM; p++)
+			{
+				finalCenters[index][u][p] = (*centers)[u][p];
+				//printf("%f\n", finalCenters[index][u][p]);
+				//double x = (*centers)[u][p];
+			}
+			finalCenters[index][u][DIM] = (*numElem)[u];
+		}
+		/*
 		for(int u=0; u<K;u++){
-			for(int p=0; p<DIM; p++){
-				finalCenters[m][u][p] = (*centers)[u][p];
-				//printf("%f\n", finalCenters[m][u][p]);
-		}}
-		for(int u=0; u<K;u++){
-			finalCenters[m][u][DIM] = (*numElem)[u];
+			//finalCenters[index][u][DIM] = (*numElem)[u];
+			//printf("%d\n", (*numElem)[u]);
 		}
-		for(int i=0; i<K; i++){
-			free((*centers)[i]);
-		}
-		free(*centers);
-		free(centers);//[K][DIM]
-		for(int i=0; i<rows; i++){
-			free((*ownership)[i]);
-		}
-		free(*ownership);
-		free(ownership);//[rows][2]
-		free(*numElem);
-		free(numElem);//[K]
-	}//return to serial
+		*/
+#pragma omp atomic
+		index+=1;
+	}//thread done
+	for(int i=0; i<K; i++){
+		free((*centers)[i]);
+	}
+	free(*centers);
+	free(centers);//[K][DIM]
+	for(int i=0; i<rows; i++){
+		free((*ownership)[i]);
+	}
+	free(*ownership);
+	free(ownership);//[rows][2]
+	free(*numElem);
+	free(numElem);//[K]
+}//return to serial
+	//
 	for(int i = 0; i < rows; i++){
 		free((*data)[i]);
 	}
 	free(*data);
 	free(data);//[rows][DIM]
-	double finalFinalCenters[K][DIM];
+	double finalFinalCenters[K][DIM+1];
 	double minimal = errors[0];
 	for(int u=0; u<K; u++){
-		for(int p=0; p<DIM; p++){
+		for(int p=0; p<(DIM+1); p++){
 			finalFinalCenters[u][p] = finalCenters[0][u][p];
 	}}
-	for(int m=0;m<ITERATIONS;m++){
-		for(int u=0; u<K;u++){
-			if(errors[m] > minimal){
-				for(int p=0;p<DIM;p++){
-					finalFinalCenters[u][p] = finalCenters[m][u][p];
-					minimal = finalCenters[m][u][p];
-	}}}}
+	for(int m=0;m<ITERATIONS;m++)
+	{
+		if(errors[m] < minimal)
+		{
+			for(int u=0; u<K;u++)
+			{
+					for(int p=0;p<(DIM+1);p++)
+					{
+						finalFinalCenters[u][p] = finalCenters[m][u][p];
+					}
+			}
+			minimal = errors[m];
+		}
+	}
 	for(int u=0; u<K;u++){
-		for(int p=0;p<DIM+1;p++){
+		for(int p=0;p<(DIM+1);p++){
 			printf("%f", finalFinalCenters[u][p]);
 			if(p<DIM){
 				printf(",");
@@ -191,6 +222,16 @@ hurdle2:
 		printf("\n");
 	}
 	//clean up
+	for(int i=0; i<ITERATIONS; i++)
+	{
+		for(int j=0; j<(DIM+1); j++)
+		{
+			free(finalCenters[i][j]);
+		}
+		free(finalCenters[i]);
+	}
+	free(errors);//[ITERATIONS];
+	free(finalCenters);//[ITERATIONS][K][DIM+1]
 	//malloc_stats();
 	PRINTF("kmeans: %s\n", strerror(errno));
 	return 0;
