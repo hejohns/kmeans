@@ -70,12 +70,9 @@ void calculateOwnership(double*** data, double*** centers, double*** ownership, 
 	{
 		for(int u = 0; u<K; u++)
 		{
-			//printf("fail-%f-%f\n", (*ownership)[i][1], distance_sqed((*data)[i], (*centers)[u], DIM));
-			//printf("thu-%f\n", distance_sqed((*data)[i], (*centers)[u], DIM));
 			if ((*ownership)[i][1] > distance_sqed((*data)[i], (*centers)[u], DIM))
 			{
 				(*ownership)[i][0] = u;
-				//printf("ownership-%d\n", u);
 				(*ownership)[i][1] = distance_sqed((*data)[i], (*centers)[u], DIM);
 			}
 		}
@@ -123,7 +120,6 @@ void newCenters(double*** data, double*** centers, double*** ownership, int** nu
 			{
 				if((*ownership)[i][0] == u)
 				{
-					//printf("trig-%d\n", (*ownership)[i][0]);
 					(*centers)[u][p] += (*data)[i][p];
 				}
 			}

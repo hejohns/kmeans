@@ -16,7 +16,7 @@
 
 #define ITER_PER_THREAD 256
 
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 #define PRINTF(...); printf(__VA_ARGS__);
 #else
@@ -65,17 +65,6 @@ int main(int argc, char** argv)
 			finalCenters[i][j] = malloc((DIM+1)*sizeof(double));
 		}
 	}
-	//
-	for(int i=0; i<ITERATIONS;i++)
-	{
-		for(int j=0; j<K; j++)
-		{
-			for(int l=0; l<DIM+1; l++){
-			finalCenters[i][j][l]=1;
-			}
-		}
-	}
-	//
 	unsigned int index=0;
 	omp_set_num_threads(NUM_THREADS);
 #pragma omp parallel for schedule(auto)
@@ -101,54 +90,18 @@ for(int m=0; m < ITERATIONS/ITER_PER_THREAD; m++)
 		double error2 = 0;
 		if(index==0){
 			initializeCentersSpaced(data, centers, rows, DIM, K);
-			/*
-				for(int u=0; u<K; u++)
-				{
-					for(int p=0; p<DIM; p++)
-					{
-						printf("dp:%f\n", (*centers)[u][p]);
-					}
-				}
-				*/
 		}
 		else{
 			initializeCentersRand(data, centers, rows, DIM, K);
-			/*
-				for(int u=0; u<K; u++)
-				{
-					for(int p=0; p<DIM; p++)
-					{
-						printf("cp:%f\n", (*centers)[u][p]);
-					}
-				}
-				*/
 		}
 		for(int j = 0; (fabs(error-error2) > 0) || (j==0); j++)
 		{
 			error = error2;
 			if(j==0){
 				initializeOwnership(data, centers, ownership, rows, DIM, K);
-				/*
-				for(int u=0; u<K; u++)
-				{
-					for(int p=0; p<DIM; p++)
-					{
-						printf("lp:%f\n", (*centers)[u][p]);
-					}
-				}
-				*/
 				calculateOwnership(data, centers, ownership, rows, DIM, K);
 			}
 			else{
-				/*
-				for(int u=0; u<K; u++)
-				{
-					for(int p=0; p<DIM; p++)
-					{
-						printf("up:%f\n", (*centers)[u][p]);
-					}
-				}
-				*/
 				calculateOwnership(data, centers, ownership, rows, DIM, K);
 			}
 			error2 = totalError(ownership, rows);
@@ -160,17 +113,9 @@ for(int m=0; m < ITERATIONS/ITER_PER_THREAD; m++)
 			for(int p=0; p<DIM; p++)
 			{
 				finalCenters[index][u][p] = (*centers)[u][p];
-				//printf("%f\n", finalCenters[index][u][p]);
-				//double x = (*centers)[u][p];
 			}
 			finalCenters[index][u][DIM] = (*numElem)[u];
 		}
-		/*
-		for(int u=0; u<K;u++){
-			//finalCenters[index][u][DIM] = (*numElem)[u];
-			//printf("%d\n", (*numElem)[u]);
-		}
-		*/
 #pragma omp atomic
 		index+=1;
 	}//thread done
