@@ -51,8 +51,7 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 	double*** restrict data = malloc(sizeof(void*));
-	int rows = 0;
-	rows = csvParse(data, datafp, DIM);
+	long unsigned int rows = csvParse(data, datafp, DIM);
 	fclose(datafp);
 	
 	double*** finalCenters = malloc(ITERATIONS*sizeof(void*));//[ITERATIONS][K][DIM+1]
@@ -65,7 +64,7 @@ int main(int argc, char** argv)
 			finalCenters[i][j] = malloc((DIM+1)*sizeof(double));
 		}
 	}
-	unsigned int index=0;
+	long unsigned int index=0;
 	omp_set_num_threads(NUM_THREADS);
 #pragma omp parallel for schedule(auto)
 for(int m=0; m < ITERATIONS/ITER_PER_THREAD; m++)
@@ -86,9 +85,16 @@ for(int m=0; m < ITERATIONS/ITER_PER_THREAD; m++)
 	(*numElem) = malloc(K*sizeof(int));
 	for(int n=0; n<ITER_PER_THREAD; n++)
 	{
+		long unsigned int thread_index;
+#pragma omp critical
+		{
+		index++;
+		thread_index = index-1;
+		}
+		//printf("%ld\n",thread_index);
 		double error = 0;
 		double error2 = 0;
-		if(index==0){
+		if(index-1==0){
 			initializeCentersSpaced(data, centers, rows, DIM, K);
 		}
 		else{
@@ -106,18 +112,17 @@ for(int m=0; m < ITERATIONS/ITER_PER_THREAD; m++)
 			}
 			error2 = totalError(ownership, rows);
 			newCenters(data, centers, ownership, numElem, rows, K, DIM);
-			errors[index] = error2;
+			errors[thread_index] = error2;
 		}//done finding one set of centers
 		for(int u=0; u<K; u++)
 		{
 			for(int p=0; p<DIM; p++)
 			{
-				finalCenters[index][u][p] = (*centers)[u][p];
+				finalCenters[thread_index][u][p] = (*centers)[u][p];
 			}
-			finalCenters[index][u][DIM] = (*numElem)[u];
+			finalCenters[thread_index][u][DIM] = (*numElem)[u];
 		}
-#pragma omp atomic
-		index+=1;
+		//printf("%ld\n",thread_index);
 	}//thread done
 	for(int i=0; i<K; i++){
 		free((*centers)[i]);
@@ -159,12 +164,12 @@ for(int m=0; m < ITERATIONS/ITER_PER_THREAD; m++)
 		}
 	}
 	for(int u=0; u<K;u++){
-		for(int p=0;p<(DIM+1);p++){
+		for(int p=0;p<DIM;p++)
+		{
 			printf("%f", finalFinalCenters[u][p]);
-			if(p<DIM){
-				printf(",");
-		}}
-		printf("\n");
+			printf(",");
+		}
+		printf("%ld\n", (long unsigned int)finalFinalCenters[u][DIM]);
 	}
 	//clean up
 	for(int i=0; i<ITERATIONS; i++)
