@@ -14,7 +14,7 @@
  * !0-true
  */
 
-#define ITER_PER_THREAD 256
+#define ITER_PER_THREAD 1024
 
 #define DEBUG 0
 #if DEBUG

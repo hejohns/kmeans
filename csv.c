@@ -92,7 +92,7 @@ double csvParse(double*** data, FILE* csvFile, const int DIM)
 		}
 		if((numDelimit+1) != DIM)
 		{
-			printf("Given DIM does not match: %d-%d\n", numDelimit, DIM);
+			printf("Given DIM does not match! Found: %d. Given: %d\n", numDelimit+1, DIM);
 			exit(1);
 		}
 	}
